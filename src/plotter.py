@@ -27,8 +27,12 @@ ZORDER = dict(
 
 N = 1000
 
+CATALOG_DATA = pd.read_csv("https://www.gw-openscience.org/eventapi/csv/GWTC/")
 
 from matplotlib import rcParams
+
+
+# +
 
 
 def set_matplotlib_style_settings(major=7, minor=3, linewidth=1.5, grid=False, mirror=True):
@@ -315,12 +319,17 @@ def adjust_axes(fig, ax):
     ax.plot(1, 1, "^k", transform=ax.get_xaxis_transform(), clip_on=False, markersize = 15)
 
     
-def scatter_gw_catalog_points():
-    data = pd.read_csv("https://www.gw-openscience.org/eventapi/csv/GWTC/")
-    data['m1'] = data["mass_1_source"]
-    data['m2'] = data["mass_2_source"]
-    plt.scatter(data.m1, data.m2, marker="+", color='k', s=90)
-
+def scatter_gw_catalog_points(errorbars=True):
+    data = CATALOG_DATA.copy()
+    m1, m2 = data["mass_1_source"], data["mass_2_source"]
+    m1e = np.abs(data["mass_1_source_lower"]), data["mass_1_source_upper"]
+    m2e = np.abs(data["mass_2_source_lower"]), data["mass_2_source_upper"]
+    
+    if errorbars:
+        plt.errorbar(m1, m2, m1e, m2e,'none', color='k', alpha=0.05)
+    plt.scatter(m1, m2, marker="+", color='k', s=90)
+                    
+        
 
 
 def plot_template_bank():
@@ -360,5 +369,92 @@ def plot_template_bank():
     
 
 plot_template_bank()
+
+
+
+# +
+
+
+
+def generate_data(x):
+    y = np.sin(x)
+    yerr_upper = [np.random.gaussian(x,2)]
+
+
+
+
+
+def scatter_gw_catalog_points(errorbars=True):
+    data = CATALOG_DATA.copy()
+    data = data[0:5]
+    m1, m2 = data["mass_1_source"], data["mass_2_source"]
+    m1e = np.abs(data["mass_1_source_lower"]), data["mass_1_source_upper"]
+    m2e = np.abs(data["mass_2_source_lower"]), data["mass_2_source_upper"]
+    
+    if errorbars:
+        plt.errorbar(m1, m2, m1e, m2e,'none', color='k', alpha=0.05, marker="+", markersize=60, markerfacecolor='k')
+    else:
+        plt.scatter(m1, m2, marker="+", color='k', s=90)
+                    
+          
+scatter_gw_catalog_points()
+scatter_gw_catalog_points(False)
+# -
+
+CATALOG_DATA[0:5]
+
+# +
+import numpy as np
+import matplotlib.pyplot as plt
+
+np.random.seed(10)
+
+def generate_data(num_points, num_repetitions):
+    n, reps = num_points, num_repetitions
+    # Generate fake data
+    x = np.logspace(0, 4*np.pi, n) ** 2
+    ys = np.array([
+        np.sin(x) + np.random.normal(0, scale=0.3, size=n) for _ in range(reps)
+    ]) ** 2
+
+    yavg = np.mean(ys, axis=0)
+    ymins = np.min(ys, axis=0)
+    ymaxs = np.max(ys, axis=0)
+    yerr = [
+        np.abs(yavg-ymins), # lower error
+        np.abs(yavg-ymaxs)  # upper error 
+    ]
+    return x, yavg, ymins, ymaxs, yerr
+
+def format_ax(axes, x):
+    for ax in axes:
+        ax.set_xlim(min(x), max(x))
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        
+def make_plot():
+    fig, axes = plt.subplots(1,2, figsize=(8, 3))
+
+    x, yavg, ymins, ymaxs, yerr = generate_data(50, 3)
+    axes[0].errorbar(x, yavg, yerr=yerr, c='tab:orange',  elinewidth=0.75, marker='.', linestyle='none')
+
+    x, yavg, ymins, ymaxs, yerr = generate_data(100, 15)
+    axes[1].plot(x, ymins, ls="--", c='tab:orange', alpha=0.4)
+    axes[1].plot(x, ymaxs, ls="--", c='tab:orange', alpha=0.4)
+    axes[1].errorbar(x, yavg, yerr=yerr, c='tab:orange', alpha=0.2, lw=0.75, linestyle='none')
+    axes[1].plot(x, yavg, c='tab:orange')
+
+    format_ax(axes, x)
+    axes[0].set_title("Example 1")
+    axes[1].set_title("Example 2")
+    plt.show()
+
+make_plot()
+# -
+
+
 
 
