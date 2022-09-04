@@ -1,6 +1,6 @@
 # +
 """
-Module to plot "template_bank.png"
+Module to plot GW data
 """
 # %reload_ext autoreload
 # %autoreload 2
@@ -15,6 +15,10 @@ from tqdm import tqdm
 from matplotlib import rcParams
 
 
+
+from scipy.ndimage import gaussian_filter1d
+import matplotlib.ticker as ticker
+
 ZORDER = dict(
     qline=3,
     regions=0,
@@ -25,14 +29,11 @@ ZORDER = dict(
 
 )
 
+
+
 N = 1000
 
 CATALOG_DATA = pd.read_csv("https://www.gw-openscience.org/eventapi/csv/GWTC/")
-
-from matplotlib import rcParams
-
-
-# +
 
 
 def set_matplotlib_style_settings(major=7, minor=3, linewidth=1.5, grid=False, mirror=True):
@@ -63,8 +64,7 @@ def set_matplotlib_style_settings(major=7, minor=3, linewidth=1.5, grid=False, m
     rcParams["axes.grid"] = grid
     rcParams["axes.titlepad"] = 8
 
-
-
+    
 import numpy as np
 from matplotlib.text import Annotation
 from matplotlib.transforms import Affine2D
@@ -295,10 +295,6 @@ def add_q_lines(ax):
         line_annotate( f'$q={q}$', line, m1_text, fontsize='medium', ha='right', xytext=xytext, zorder=ZORDER['qline'])
 
 
-
-
-
-
 def adjust_axes(fig, ax):
     # removing the default axis on all sides:
     ax.spines['right'].set_visible(False)
@@ -368,93 +364,51 @@ def plot_template_bank():
 
     
 
+def smooth_xydata(x,y):
+    return x, gaussian_filter1d(y,0.9)
+    
+
+
+
+def plot_redshift(ax, ce, ligo):
+    ax.loglog(*smooth_xydata(ce.total_mass, ce.redshift), lw=5, c='C1')
+    ax.loglog(*smooth_xydata(ligo.total_mass, ligo.redshift), lw=5)
+    ax.set_xlabel(r"Total Source-frame Mass [$M_{\odot}$]")
+    ax.set_ylabel(r"Redshift")
+    ax.set_xlim(min(ligo.total_mass), max(ligo.total_mass))
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda y, _: '{:g}'.format(y)))
+    ax.tick_params(axis='x', pad=10)
+    
+
+def plot_sensitivity(ax, ce, ligo):
+    ax.loglog(ce.f, ce.noise, lw=5, label="Cosmic Explorer")
+    ax.loglog(ligo.f, ligo.noise, lw=5, label="LIGO A+")
+    ax.set_xlabel(r"Frequency [Hz]")
+    ax.set_ylabel(r"Strain Noise [Hz$^{-1/2}$]")
+    ax.set_xlim(5,4000)
+    ax.set_ylim(1e-25,1e-19)
+    ax.legend(frameon=False, fontsize=20)
+    ax.tick_params(axis='x', pad=10)
+
+    
+    
+def plot_ligo_vs_ce():
+    set_matplotlib_style_settings(major=12, minor=7, linewidth=1.5, grid=False, mirror=True)
+    z_ce = pd.read_csv("data/redshift/ce.csv")
+    z_ligo = pd.read_csv("data/redshift/ligo_a_plus.csv")
+    n_ce = pd.read_csv("data/sensitivity/ce.txt", delimiter="\t")
+    n_ligo = pd.read_csv("data/sensitivity/ligo_a_plus.txt", delimiter=" ")
+
+    fig, axes = plt.subplots(1,2, figsize=(14,6))
+    plot_redshift(axes[0], z_ce, z_ligo)
+    plot_sensitivity(axes[1], n_ce, n_ligo)
+    plt.tight_layout()
+    plt.savefig("ligo_vs_ce.png", dpi=300)
+    
+
+# -
+
+
 plot_template_bank()
 
-
-
-# +
-
-
-
-def generate_data(x):
-    y = np.sin(x)
-    yerr_upper = [np.random.gaussian(x,2)]
-
-
-
-
-
-def scatter_gw_catalog_points(errorbars=True):
-    data = CATALOG_DATA.copy()
-    data = data[0:5]
-    m1, m2 = data["mass_1_source"], data["mass_2_source"]
-    m1e = np.abs(data["mass_1_source_lower"]), data["mass_1_source_upper"]
-    m2e = np.abs(data["mass_2_source_lower"]), data["mass_2_source_upper"]
-    
-    if errorbars:
-        plt.errorbar(m1, m2, m1e, m2e,'none', color='k', alpha=0.05, marker="+", markersize=60, markerfacecolor='k')
-    else:
-        plt.scatter(m1, m2, marker="+", color='k', s=90)
-                    
-          
-scatter_gw_catalog_points()
-scatter_gw_catalog_points(False)
-# -
-
-CATALOG_DATA[0:5]
-
-# +
-import numpy as np
-import matplotlib.pyplot as plt
-
-np.random.seed(10)
-
-def generate_data(num_points, num_repetitions):
-    n, reps = num_points, num_repetitions
-    # Generate fake data
-    x = np.logspace(0, 4*np.pi, n) ** 2
-    ys = np.array([
-        np.sin(x) + np.random.normal(0, scale=0.3, size=n) for _ in range(reps)
-    ]) ** 2
-
-    yavg = np.mean(ys, axis=0)
-    ymins = np.min(ys, axis=0)
-    ymaxs = np.max(ys, axis=0)
-    yerr = [
-        np.abs(yavg-ymins), # lower error
-        np.abs(yavg-ymaxs)  # upper error 
-    ]
-    return x, yavg, ymins, ymaxs, yerr
-
-def format_ax(axes, x):
-    for ax in axes:
-        ax.set_xlim(min(x), max(x))
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-
-        
-def make_plot():
-    fig, axes = plt.subplots(1,2, figsize=(8, 3))
-
-    x, yavg, ymins, ymaxs, yerr = generate_data(50, 3)
-    axes[0].errorbar(x, yavg, yerr=yerr, c='tab:orange',  elinewidth=0.75, marker='.', linestyle='none')
-
-    x, yavg, ymins, ymaxs, yerr = generate_data(100, 15)
-    axes[1].plot(x, ymins, ls="--", c='tab:orange', alpha=0.4)
-    axes[1].plot(x, ymaxs, ls="--", c='tab:orange', alpha=0.4)
-    axes[1].errorbar(x, yavg, yerr=yerr, c='tab:orange', alpha=0.2, lw=0.75, linestyle='none')
-    axes[1].plot(x, yavg, c='tab:orange')
-
-    format_ax(axes, x)
-    axes[0].set_title("Example 1")
-    axes[1].set_title("Example 2")
-    plt.show()
-
-make_plot()
-# -
-
-
-
-
+plot_ligo_vs_ce()
